@@ -1,0 +1,90 @@
+`timescale 1ns / 1ps
+///////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: A.Rosales
+// 
+// Create Date: 11/13/2024 03:46:29 PM
+// Design Name: 
+// Module Name: servo_tb
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module servo_tb;
+    reg clk, reset, enable, direction;
+    reg [7:0] duty; // 8-bit duty cycle
+    wire pwm_out, motor_dir;
+
+    // Instantiate the servo PWM control module
+    servo_pwm_control uut (
+        .clk(clk),
+        .reset(reset),
+        .duty(duty),
+        .enable(enable),
+        .direction(direction),
+        .pwm_out(pwm_out),
+        .motor_dir(motor_dir)
+    );
+
+    // Clock generation: 100 MHz clock
+    initial clk = 0;
+    always #5 clk = ~clk; // 10 ns clock period
+
+    initial begin
+        // Initialize inputs
+        reset = 1;
+        enable = 0;
+        direction = 0;
+        duty = 8'd0;
+
+        // Apply reset
+        #20 reset = 0;
+
+        // Test 0% duty cycle
+        #10 enable = 1;       // Enable the PWM
+        duty = 8'd0;          // Set duty cycle to 0%
+        #500;                 // Wait for 500 ns
+
+        // Test 50% duty cycle
+        duty = 8'd128;        // Set duty cycle to 50%
+        #500;                 // Wait for 500 ns
+
+        // Test 100% duty cycle
+        duty = 8'd255;        // Set duty cycle to 100%
+        #500;                 // Wait for 500 ns
+
+        // Disable the motor
+        enable = 0;           // Disable PWM
+        #500;
+
+        // Re-enable and test 25% duty cycle
+        enable = 1;
+        duty = 8'd64;         // Set duty cycle to 25%
+        #500;
+
+        // Test 75% duty cycle
+        duty = 8'd192;        // Set duty cycle to 75%
+        #500;
+
+        // Test extreme low value for duty cycle
+        duty = 8'd1;          // Almost 0% duty cycle
+        #500;
+
+        // Test extreme high value for duty cycle
+        duty = 8'd254;        // Almost 100% duty cycle
+        #500;
+
+        // Stop the simulation
+        $stop;
+    end
+endmodule
