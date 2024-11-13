@@ -1,0 +1,46 @@
+module servo_control (
+    input clk,             // System clock
+    input reset,           // Reset signal
+    input open,            // Command to open the claw
+    output reg pwm_out     // PWM output for the servo
+);
+
+    // Parameters for servo timing (in clock cycles)
+    parameter WIDTH = 20;            // Counter width for clock precision
+    parameter PERIOD = 20'd2000000; // Full PWM period (20 ms for 50 Hz)
+    parameter DUTY_OPEN = 20'd100000; // Duty cycle for fully open (1 ms pulse)
+    parameter DUTY_CLOSED = 20'd200000; // Duty cycle for fully closed (2 ms pulse)
+
+    // Internal registers
+    reg [WIDTH-1:0] counter; // PWM counter
+    reg [WIDTH-1:0] duty;    // Current duty cycle
+
+    // PWM generation logic
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            counter <= 0;
+            pwm_out <= 0;
+        end else begin
+            // Increment the counter
+            if (counter < PERIOD - 1)
+                counter <= counter + 1;
+            else
+                counter <= 0;
+
+            // Update PWM output based on duty cycle
+            pwm_out <= (counter < duty);
+        end
+    end
+
+    // Duty cycle update logic (open/close control)
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            duty <= DUTY_CLOSED; // Default to closed position
+        end else begin
+            if (open)
+                duty <= DUTY_OPEN; // Fully open
+            else
+                duty <= DUTY_CLOSED; // Fully closed
+        end
+    end
+endmodule
