@@ -1,3 +1,6 @@
+//this stack is referenced in IR emitter 
+
+
 module pwm_simple
 (  // WIDTH defines the bit size for the counter
     input clk,
