@@ -1,5 +1,6 @@
 //This is what will be used to control the claw. A slight modification needs to be made and will be done soon.
 //The constraint file needs to be udpated accordingly to the JA ports due to orietation of basys with respect to rover and claw
+//Change default config of claw to open
 
 module servo_control (
     input clk,             // System clock
