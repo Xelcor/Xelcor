@@ -1,0 +1,51 @@
+module freq_meas(
+    input CLK100MHZ,
+    input signal_in,
+    input reset,
+    output reg [31:0] frequency,
+    output reg done
+);
+
+    reg [31:0] edge_count;
+    reg [31:0] time_counter;
+    reg prev_signal_in;
+    reg [31:0] clk_cycles_in_test_period = 'd1000000; // 0.01 seconds at 100 MHz
+
+    initial begin
+        edge_count = 0;
+        time_counter = 0;
+        frequency = 0;
+        prev_signal_in = 0;
+        done = 0;
+    end
+
+    always @(posedge CLK100MHZ or posedge reset) begin
+        if (reset) begin
+            edge_count <= 0;
+            time_counter <= 0;
+            frequency <= 0;
+            prev_signal_in <= 0;
+            done <= 0;
+        end else begin
+            time_counter <= time_counter + 1;
+
+            // Edge detection
+            if (prev_signal_in == 0 && signal_in == 1) begin
+                edge_count <= edge_count + 1;
+                $display("Edge detected: %d at time %t", edge_count, $time);
+            end
+            prev_signal_in <= signal_in;
+
+            // Measurement period complete
+            if (time_counter == clk_cycles_in_test_period) begin
+                frequency <= edge_count; // Scaled for 0.1 second period
+                done <= 1;
+                $display("Measurement complete: Frequency = %d at time %t", frequency, $time);
+                time_counter <= 0;
+                edge_count <= 0;
+            end else begin
+                done <= 0;
+            end
+        end
+    end
+endmodule
