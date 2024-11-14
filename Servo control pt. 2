@@ -1,3 +1,6 @@
+//This is what will he used to power and control the claw. A slight modification needs to be made and will be done soon.
+//The constraint file needs to be udpated accordingly to the JA ports due to orietation of basys with respect to rover and claw
+
 module servo_control (
     input clk,             // System clock
     input reset,           // Reset signal
