@@ -1,0 +1,52 @@
+**Needs Testing**
+**VHDL is a bloddy pain**
+**ackknowledgements to A.Meyer for his input and feedback**
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity xadc_led_test is
+    Port (
+        clk         : in  std_logic; -- System Clock
+        vp_in       : in  std_logic; -- Analog input (V_P)
+        vn_in       : in  std_logic; -- Analog input (V_N)
+        led         : out std_logic  -- LED Output
+    );
+end xadc_led_test;
+
+architecture Behavioral of xadc_led_test is
+    // Signals for XADC
+    signal xadc_data   : std_logic_vector(15 downto 0); -- 16-bit XADC output
+    signal scaled_data : std_logic_vector(11 downto 0); -- Scaled to 12 bits
+    signal threshold   : std_logic_vector(11 downto 0) := "001100110011"; -- Example threshold
+begin
+    // XADC instance
+    xadc_inst: entity work.xadc_wizard_0
+        port map (
+            daddr_in   => "00000",    -- Channel 0 for VP/VN
+            dclk_in    => clk,       -- Clock input
+            reset_in   => '0',       -- Reset
+            vp_in      => vp_in,     -- Analog positive input
+            vn_in      => vn_in,     -- Analog negative input
+            do_out     => xadc_data, -- XADC digital output
+            drdy_out   => open       -- Data ready signal (not used here)
+        );
+
+    -- Scale XADC output to 12 bits
+    scaled_data <= xadc_data(15 downto 4);
+
+    -- LED logic: Turn on LED if ADC value is below threshold (i.e. detection logic)
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if unsigned(scaled_data) < unsigned(threshold) then
+                led <= '1'; -- Turn on LED
+            else
+                led <= '0'; -- Turn off LED
+            end if;
+        end if;
+    end process;
+end Behavioral;
+
+
