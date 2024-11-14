@@ -16,12 +16,12 @@ entity xadc_led_test is
 end xadc_led_test;
 
 architecture Behavioral of xadc_led_test is
-    -- Signals for XADC
+    //Signals for XADC
     signal xadc_data   : std_logic_vector(15 downto 0); -- 16-bit XADC output
     signal scaled_data : std_logic_vector(11 downto 0); -- Scaled to 12 bits
     signal threshold   : std_logic_vector(11 downto 0) := "001100110011"; -- Example threshold
 begin
-    -- XADC instance
+     //XADC instance
     xadc_inst: entity work.xadc_wizard_0
         port map (
             daddr_in   => "00000",    -- Channel 0 for VP/VN
@@ -33,7 +33,7 @@ begin
             drdy_out   => open       -- Data ready signal (not used here)
         );
 
-    -- Scale XADC output to 12 bits
+    // Scale XADC output to 12 bits
     scaled_data <= xadc_data(15 downto 4);
 
     // LED logic: Turn on LED if ADC value is below threshold (i.e. object detection logic)
