@@ -1,3 +1,5 @@
+// color state machine references this stack
+
 module freq_meas(
     input CLK100MHZ,
     input signal_in,
