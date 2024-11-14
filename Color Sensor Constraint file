@@ -1,7 +1,5 @@
-## This file is a general .xdc for the Basys3 rev B board
-## To use it in a project:
-## - uncomment the lines corresponding to used pins
-## - rename the used ports (in each line, after get_ports) according to the top level signal names in the project
+***the pmod ports need to be modified for the ##Pmod Header JB since color sensor is in back***
+
 
 # Clock signal
 set_property PACKAGE_PIN W5 [get_ports CLK100MHZ]
