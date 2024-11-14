@@ -1,4 +1,6 @@
 //NEEDS TESTING 
+// VHDL was a bloody nightmare to learn
+// **Credit to A.Meyer for the his invaluable input and assistance**
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -34,7 +36,7 @@ begin
     -- Scale XADC output to 12 bits
     scaled_data <= xadc_data(15 downto 4);
 
-    -- LED logic: Turn on LED if ADC value is below threshold
+    // LED logic: Turn on LED if ADC value is below threshold (i.e. object detection logic)
     process(clk)
     begin
         if rising_edge(clk) then
