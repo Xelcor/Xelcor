@@ -1,0 +1,33 @@
+module FrequencyToColorConverter(
+    input clk,
+    input reset,
+    input done_color,
+    input [31:0] red,
+    input [31:0] green,
+    input [31:0] blue,
+    output reg [2:0] rgb_output = 3'b000
+);
+
+    parameter TOLERANCE = 100;
+    parameter RED_THRESH = 100;
+    parameter GREEN_THRESH = 100;
+    parameter BLUE_THRESH = 100;
+
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            rgb_output <= 3'b000;
+        end else if (done_color) begin
+            if ((red > green + TOLERANCE) && (red > blue + TOLERANCE) && red > RED_THRESH) begin
+                rgb_output <= 3'b100; // Red is dominant
+            end else if ((green > red + TOLERANCE) && (green > blue + TOLERANCE) && green > GREEN_THRESH) begin
+                rgb_output <= 3'b010; // Green is dominant
+            end else if ((blue > red + TOLERANCE) && (blue > green + TOLERANCE) && blue > BLUE_THRESH) begin
+                rgb_output <= 3'b001; // Blue is dominant
+            end else begin
+                rgb_output <= 3'b000; // No dominant color detected
+            end
+        end
+    end
+
+
+endmodule
