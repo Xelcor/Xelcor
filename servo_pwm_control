@@ -1,3 +1,7 @@
+//DO NOT USE THIS CODE
+//IT WORKS BUT REQUIRES TO MANY PORTS ON BAYSYS
+//MODIFICATIONS ARE IN PROGRESS
+
 module servo_pwm_control (
     input clk,             // System clock
     input reset,           // Reset signal
