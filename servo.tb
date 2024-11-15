@@ -1,36 +1,102 @@
-///Do not use 
+**Do not use**
+**This is a rather elaborate testbench I made to test quite a few things such as the period counter, test status, high and low sates, open and closing states**
+
+`timescale 1ns/1ps
 
 module servo_tb;
-    reg clk, reset, enable, direction;
-    reg [7:0] duty;
-    wire pwm_out, motor_dir;
 
-    // Instantiate the module
+    // Inputs
+    reg clk;
+    reg reset;
+    reg open;
+
+    // Outputs
+    wire pwm_out;
+
+    // Internal variables for validation
+    reg [31:0] high_time;      // Counter to measure high time of pwm_out
+    reg [31:0] period_counter; // Counter for full period of pwm_out
+    reg high_detected;         // Flag to detect high state
+    reg test_passed;           // Flag to indicate test status
+
+    // Expected values (in clock cycles, based on parameters in module)
+    parameter CLOCK_FREQUENCY = 100_000_000; // 100 MHz
+    parameter DUTY_OPEN = 500_000;           // 5 ms for open (1 ms pulse width)
+    parameter DUTY_CLOSED = 1_000_000;       // 10 ms for closed (2 ms pulse width)
+
+    // Instantiate the DUT (Device Under Test)
     servo_pwm_control uut (
         .clk(clk),
         .reset(reset),
-        .duty(duty),
-        .enable(enable),
-        .direction(direction),
-        .pwm_out(pwm_out),
-        .motor_dir(motor_dir)
+        .open(open),
+        .pwm_out(pwm_out)
     );
 
-    // Generate a clock signal
+    // Generate 100 MHz clock
     initial clk = 0;
-    always #5 clk = ~clk; // 100 MHz clock
+    always #5 clk = ~clk; // 10 ns period
 
+    // Test sequence
     initial begin
         // Initialize inputs
         reset = 1;
-        enable = 0;
-        direction = 0;
-        duty = 8'd128; // 50% duty cycle
+        open = 0;
+        high_time = 0;
+        period_counter = 0;
+        high_detected = 0;
+        test_passed = 1;
 
-        #10 reset = 0;
-        #20 enable = 1;
-        #40 direction = 1;
-        #100 enable = 0; // Disable the motor
-        #50 $stop;
+        // Release reset
+        #50 reset = 0;
+
+        // Test open state
+        open = 1;
+        validate_pwm(DUTY_OPEN);
+
+        // Test closed state
+        open = 0;
+        validate_pwm(DUTY_CLOSED);
+
+        // Finish simulation
+        $finish;
     end
+
+    // Task to validate PWM output
+    task validate_pwm;
+        input [31:0] expected_high_time;
+        begin
+            high_time = 0;
+            period_counter = 0;
+            high_detected = 0;
+
+            // Monitor pwm_out for one full period
+            @(posedge clk);
+            while (period_counter < uut.PERIOD) begin
+                @(posedge clk);
+
+                if (pwm_out) begin
+                    if (!high_detected) begin
+                        high_detected = 1;
+                        high_time = 0; // Reset high time counter
+                    end
+                    high_time = high_time + 1;
+                end else begin
+                    if (high_detected) begin
+                        high_detected = 0;
+                    end
+                end
+
+                period_counter = period_counter + 1;
+            end
+
+            // Check if measured high time matches the expected high time
+            if (high_time != expected_high_time) begin
+                $display("ERROR: PWM high time mismatch. Expected: %d, Measured: %d", expected_high_time, high_time);
+                test_passed = 0;
+            end else begin
+                $display("PASS: PWM high time is correct for state. Measured: %d", high_time);
+            end
+        end
+    endtask
+
 endmodule
