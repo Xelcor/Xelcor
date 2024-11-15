@@ -1,0 +1,56 @@
+//This is what will be used to control the claw. A slight modification needs to be made and will be done soon.
+//The constraint file needs to be udpated accordingly to the JA ports due to orietation of basys with respect to rover and claw
+//Change default config of claw to open
+
+module servo_pwm_control (
+    input clk,              // System clock
+    input reset,            // Reset signal
+    input open,             // Command to open the claw
+    output reg pwm_out,     // PWM output for the servo
+    output reg led          // Debugging LED output
+);
+
+    // Parameters for servo timing (in clock cycles)
+    parameter WIDTH = 20;            // Counter width for clock precision
+    parameter PERIOD = 20'd1000000;  // Full PWM period (20 ms for 50 Hz)
+    parameter DUTY_OPEN = 20'd50000; // Duty cycle for fully open (1 ms pulse)
+    parameter DUTY_CLOSED = 20'd100000; // Duty cycle for fully closed (2 ms pulse)
+
+    // Internal registers
+    reg [WIDTH-1:0] counter;         // PWM counter
+    reg [WIDTH-1:0] duty;            // Current duty cycle
+
+    // PWM generation logic
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            counter <= 0;
+            pwm_out <= 0;
+        end else begin
+            // Increment the counter
+            if (counter < PERIOD - 1)
+                counter <= counter + 1;
+            else
+                counter <= 0;
+
+            // Update PWM output based on duty cycle
+            pwm_out <= (counter < duty);
+        end
+    end
+
+    // Duty cycle and LED control logic
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            duty <= DUTY_OPEN; // Default to open position
+            led <= 1;          // Turn LED on for open position
+        end else begin
+            if (open) begin
+                duty <= DUTY_OPEN; // Open position
+                led <= 1;          // Turn LED on
+            end else begin
+                duty <= DUTY_CLOSED; // Closed position
+                led <= 0;            // Turn LED off
+            end
+        end
+    end
+endmodule
+
