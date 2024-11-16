@@ -1,0 +1,10 @@
+## XADC Analog Input Pins
+set_property PACKAGE_PIN A13 [get_ports vp_in]   # V_P (JXADC A0)
+set_property IOSTANDARD LVCMOS33 [get_ports vp_in]
+
+set_property PACKAGE_PIN A14 [get_ports vn_in]   # V_N (JXADC A1)
+set_property IOSTANDARD LVCMOS33 [get_ports vn_in]
+
+## LED Output
+set_property PACKAGE_PIN U16 [get_ports led]     # LD0
+set_property IOSTANDARD LVCMOS33 [get_ports led]
