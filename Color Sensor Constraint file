@@ -1,4 +1,4 @@
-***the pmod ports need to be modified for the ##Pmod Header JB since color sensor is in back***
+***This file has been updated such that the color sensor is now plugged into the JB PMOD***
 
 
 # Clock signal
