@@ -1,43 +1,44 @@
 module IR_emitter(
-    input clk,                    // Clock
-    input start, 
-    input [2:0] rgb,
-    output pwm_signal
-    );
-    reg [16:0]duty;
-    reg [16:0] max_value;
-    initial begin
+    input clk,                    // Clock
+    input start, 
+    input [2:0] rgb,
+    output pwm_signal
+    );
+    reg [16:0]duty;
+    reg [16:0] max_value;
+    initial begin
 
-    end
-        pwm_simple ps(
-        .clk(clk),
-        .start(start),
-        .duty(duty),
-        .max(max_value),
-        .pwm_out(pwm_signal)
-    );
-    always @(*) begin 
-    case(rgb[2:0])
-    3'b100: begin
-    max_value= 17'd100000;
-    duty = 17'd50000;
-    end
-    3'b010: begin
-    max_value= 17'd50000;
-    duty = 17'd25000;
-    end
-    3'b001: begin
-    max_value = 17'd33333;
-    duty = 17'd16666;
-    end
-    default:
-    begin
-    max_value=17'd0;
-    duty = 17'd0;
-    end
-    endcase 
-    end
+    end
+        pwm_simple ps(
+        .clk(clk),
+        .start(start),
+        .duty(duty),
+        .max(max_value),
+        .pwm_out(pwm_signal)
+    );
+    always @(*) begin 
+    case(rgb[2:0])
+    3'b100: begin
+    max_value= 17'd100000;
+    duty = 17'd50000;
+    end
+    3'b010: begin
+    max_value= 17'd50000;
+    duty = 17'd25000;
+    end
+    3'b001: begin
+    max_value = 17'd33333;
+    duty = 17'd16666;
+    end
+    default:
+    begin
+    max_value=17'd0;
+    duty = 17'd0;
+    end
+    endcase 
+    end
 endmodule
+
 
 
 
