@@ -9,9 +9,10 @@ module ColorSensorStateMachine(
     output reg S2 = 0,
     output reg S3 = 0,
     output reg [1:0] color_state = 0,
-    output reg [29:0] color_sequence_flat = 30'b0, 
+    output reg [29:0] color_sequence_flat = 30'b0, // Flattened sequence buffer (10 colors * 3 bits)
     output reg [3:0] color_count = 0,
     output reg [2:0] detected_color = 3'b000, // Currently detected color
+    output reg pad_complete = 0,             // Indicates when the entire pad has been read
     output [31:0] frequency,
     output done
 );
@@ -40,6 +41,7 @@ module ColorSensorStateMachine(
             color_count <= 0;
             detected_color <= 3'b000;
             done_color <= 0;
+            pad_complete <= 0;
         end else if (done) begin
             case (color_state)
                 BLANK_STATE: begin
@@ -49,7 +51,7 @@ module ColorSensorStateMachine(
                     S3 <= 1'b0;
                 end
                 RED_STATE: begin
-                    red <= frequency; // Store red frequency
+                    red <= frequency;
                     color_state <= GREEN_STATE;
                     S2 <= 1'b1; // Select green photodiode
                     S3 <= 1'b1;
@@ -58,11 +60,11 @@ module ColorSensorStateMachine(
                     if ((red > green + 100) && (red > blue + 100)) begin
                         detected_color <= 3'b100; // Red
                     end else begin
-                        detected_color <= 3'b000; // No dominant color yet
+                        detected_color <= 3'b000; // No color
                     end
                 end
                 GREEN_STATE: begin
-                    green <= frequency; // Store green frequency
+                    green <= frequency;
                     color_state <= BLUE_STATE;
                     S2 <= 1'b0; // Select blue photodiode
                     S3 <= 1'b1;
@@ -71,11 +73,11 @@ module ColorSensorStateMachine(
                     if ((green > red + 100) && (green > blue + 100)) begin
                         detected_color <= 3'b010; // Green
                     end else begin
-                        detected_color <= 3'b000; // No dominant color yet
+                        detected_color <= 3'b000; // No color
                     end
                 end
                 BLUE_STATE: begin
-                    blue <= frequency; // Store blue frequency
+                    blue <= frequency;
                     done_color <= 1; // All color frequencies captured
                     color_state <= BLANK_STATE;
                     S2 <= 1'b0;
@@ -85,13 +87,18 @@ module ColorSensorStateMachine(
                     if ((blue > red + 100) && (blue > green + 100)) begin
                         detected_color <= 3'b001; // Blue
                     end else begin
-                        detected_color <= 3'b000; // No dominant color yet
+                        detected_color <= 3'b000; // No color
                     end
 
-                    // Store the detected color in the sequence buffer
-                    if (color_count < 10) begin
+                    // Store detected color if valid
+                    if (detected_color != 3'b000 && color_count < 10) begin
                         color_sequence_flat <= {color_sequence_flat[26:0], detected_color}; // Shift in new color
                         color_count <= color_count + 1;
+                    end
+
+                    // Check for end-of-pad condition (no new colors detected)
+                    if (detected_color == 3'b000) begin
+                        pad_complete <= 1; // Mark the pad as complete
                     end
                 end
             endcase
