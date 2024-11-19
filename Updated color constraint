@@ -1,3 +1,5 @@
+//Do not use
+
 # Clock signal
 set_property PACKAGE_PIN W5 [get_ports CLK100MHZ]
 set_property IOSTANDARD LVCMOS33 [get_ports CLK100MHZ]
