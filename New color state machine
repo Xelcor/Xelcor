@@ -1,0 +1,92 @@
+module ColorSensorStateMachine(
+    input clk,
+    input reset,
+    input signal_in,
+    output reg done_color = 0,
+    output reg [31:0] red = 0,
+    output reg [31:0] green = 0,
+    output reg [31:0] blue = 0,
+    output reg S2 = 0,
+    output reg S3 = 0,
+    output reg [1:0] color_state = 0,
+    output reg [2:0] color_sequence [0:9], // Buffer to hold up to 10 detected colors
+    output reg [3:0] color_count = 0,     // Counter for the number of detected colors
+    output [31:0] frequency,
+    output done
+);
+
+    // Frequency measurement instance
+    freq_meas f1 (
+        .CLK100MHZ(clk),
+        .signal_in(signal_in),
+        .reset(reset),
+        .frequency(frequency),
+        .done(done)
+    );
+
+    localparam BLANK_STATE = 2'b00, RED_STATE = 2'b01, GREEN_STATE = 2'b10, BLUE_STATE = 2'b11;
+
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            // Reset all registers and outputs
+            red <= 0;
+            green <= 0;
+            blue <= 0;
+            S2 <= 0;
+            S3 <= 0;
+            color_state <= BLANK_STATE;
+            color_count <= 0;
+            done_color <= 0;
+            for (int i = 0; i < 10; i = i + 1) begin
+                color_sequence[i] <= 3'b000; // Clear the color buffer
+            end
+        end else if (done) begin
+            // State machine transitions
+            case (color_state)
+                BLANK_STATE: begin
+                    done_color <= 0; // Reset the done flag
+                    color_state <= RED_STATE;
+                    S2 <= 1'b0; // Select red photodiode
+                    S3 <= 1'b0;
+                end
+                RED_STATE: begin
+                    red <= frequency; // Store red frequency
+                    color_state <= GREEN_STATE;
+                    S2 <= 1'b1; // Select green photodiode
+                    S3 <= 1'b1;
+                end
+                GREEN_STATE: begin
+                    green <= frequency; // Store green frequency
+                    color_state <= BLUE_STATE;
+                    S2 <= 1'b0; // Select blue photodiode
+                    S3 <= 1'b1;
+                end
+                BLUE_STATE: begin
+                    blue <= frequency; // Store blue frequency
+                    done_color <= 1; // All color frequencies captured
+                    color_state <= BLANK_STATE;
+                    S2 <= 1'b0;
+                    S3 <= 1'b0;
+
+                    // Determine the dominant color
+                    reg [2:0] detected_color = 3'b000;
+                    if ((red > green + 100) && (red > blue + 100)) begin
+                        detected_color <= 3'b100; // Red
+                    end else if ((green > red + 100) && (green > blue + 100)) begin
+                        detected_color <= 3'b010; // Green
+                    end else if ((blue > red + 100) && (blue > green + 100)) begin
+                        detected_color <= 3'b001; // Blue
+                    end else begin
+                        detected_color <= 3'b000; // No dominant color
+                    end
+
+                    // Store the detected color in the sequence buffer
+                    if (color_count < 10) begin
+                        color_sequence[color_count] <= detected_color; // Add color to buffer
+                        color_count <= color_count + 1; // Increment the count
+                    end
+                end
+            endcase
+        end
+    end
+endmodule
