@@ -11,6 +11,7 @@ module ColorSensorStateMachine(
     output reg [1:0] color_state = 0,
     output reg [29:0] color_sequence_flat = 30'b0, 
     output reg [3:0] color_count = 0,
+    output reg [2:0] detected_color = 3'b000, // Currently detected color
     output [31:0] frequency,
     output done
 );
@@ -26,10 +27,9 @@ module ColorSensorStateMachine(
 
     localparam BLANK_STATE = 2'b00, RED_STATE = 2'b01, GREEN_STATE = 2'b10, BLUE_STATE = 2'b11;
 
-    reg [2:0] detected_color;
-
     always @(posedge clk or posedge reset) begin
         if (reset) begin
+            // Reset all registers and outputs
             red <= 0;
             green <= 0;
             blue <= 0;
@@ -38,46 +38,57 @@ module ColorSensorStateMachine(
             color_state <= BLANK_STATE;
             color_sequence_flat <= 30'b0;
             color_count <= 0;
+            detected_color <= 3'b000;
             done_color <= 0;
         end else if (done) begin
             case (color_state)
                 BLANK_STATE: begin
-                    done_color <= 0;
+                    done_color <= 0; // Reset the done flag
                     color_state <= RED_STATE;
                     S2 <= 1'b0; // Select red photodiode
                     S3 <= 1'b0;
                 end
                 RED_STATE: begin
-                    red <= frequency;
+                    red <= frequency; // Store red frequency
                     color_state <= GREEN_STATE;
                     S2 <= 1'b1; // Select green photodiode
                     S3 <= 1'b1;
+
+                    // Update detected color for red
+                    if ((red > green + 100) && (red > blue + 100)) begin
+                        detected_color <= 3'b100; // Red
+                    end else begin
+                        detected_color <= 3'b000; // No dominant color yet
+                    end
                 end
                 GREEN_STATE: begin
-                    green <= frequency;
+                    green <= frequency; // Store green frequency
                     color_state <= BLUE_STATE;
                     S2 <= 1'b0; // Select blue photodiode
                     S3 <= 1'b1;
+
+                    // Update detected color for green
+                    if ((green > red + 100) && (green > blue + 100)) begin
+                        detected_color <= 3'b010; // Green
+                    end else begin
+                        detected_color <= 3'b000; // No dominant color yet
+                    end
                 end
                 BLUE_STATE: begin
-                    blue <= frequency;
-                    done_color <= 1;
+                    blue <= frequency; // Store blue frequency
+                    done_color <= 1; // All color frequencies captured
                     color_state <= BLANK_STATE;
                     S2 <= 1'b0;
                     S3 <= 1'b0;
 
-                    // Determine dominant color
-                    if ((red > green + 100) && (red > blue + 100)) begin
-                        detected_color <= 3'b100; // Red
-                    end else if ((green > red + 100) && (green > blue + 100)) begin
-                        detected_color <= 3'b010; // Green
-                    end else if ((blue > red + 100) && (blue > green + 100)) begin
+                    // Update detected color for blue
+                    if ((blue > red + 100) && (blue > green + 100)) begin
                         detected_color <= 3'b001; // Blue
                     end else begin
-                        detected_color <= 3'b000; // No color
+                        detected_color <= 3'b000; // No dominant color yet
                     end
 
-                    // Store detected color 
+                    // Store the detected color in the sequence buffer
                     if (color_count < 10) begin
                         color_sequence_flat <= {color_sequence_flat[26:0], detected_color}; // Shift in new color
                         color_count <= color_count + 1;
@@ -87,4 +98,3 @@ module ColorSensorStateMachine(
         end
     end
 endmodule
-
