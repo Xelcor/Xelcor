@@ -1,0 +1,81 @@
+module top(
+    input CLK100MHZ,
+    input start,
+    input reset,
+    input signal_in,
+    input SW2,
+    input SW3,
+    output S2, S3,
+    output [6:0] seg,
+    output [3:0] an,
+    output [15:0] LED,
+    output [2:0] rgb_output
+);
+
+    // Internal signals
+    reg [31:0] frequency;
+    wire [31:0] red, green, blue, frequency;
+    wire done_color;
+    wire pad_complete;
+    wire [2:0] detected_color;
+    wire [29:0] color_sequence_flat; // Stores the sequence of detected colors
+    wire [3:0] color_count;
+
+    // Assign detected color to LEDs
+    assign rgb_output = detected_color; // Display the currently detected color
+    assign LED[2:0] = detected_color;   // Also show it on LEDs
+    assign LED[3] = done_color;         // Indicate when a color is detected
+    assign LED[4] = pad_complete;       // Indicate when the pad detection is complete
+
+    // Instantiate 7-segment display for sequence or frequency
+    seven_segment_display ssd (
+        .CLK100MHZ(CLK100MHZ),
+        .frequency({5'b0, frequency}),
+        .seg(seg),
+        .an(an)
+    );
+
+    // Convert frequencies to RGB output (optional, if needed)
+    FrequencyToColorConverter f2 (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .rgb_output(rgb_output)
+    );
+
+    // Color Sensor State Machine
+    ColorSensorStateMachine csm (
+        .clk(CLK100MHZ),
+        .reset(reset),
+        .signal_in(signal_in),
+        .done_color(done_color),
+        .red(red),
+        .green(green),
+        .blue(blue),
+        .S2(S2),
+        .S3(S3),
+        .color_sequence_flat(color_sequence_flat), // Sequence of detected colors
+        .color_count(color_count),                 // Number of detected colors
+        .detected_color(detected_color),           // Current detected color
+        .pad_complete(pad_complete)                // Pad detection complete signal
+    );
+
+    // Logic for frequency output selection
+    always @(posedge CLK100MHZ) begin
+        if (reset) begin
+            frequency <= 0;
+        end else if (SW2 == 1'b0 && SW3 == 1'b0) begin
+            frequency <= red; // Display red frequency
+        end else if (SW2 == 1'b0 && SW3 == 1'b1) begin
+            frequency <= green; // Display green frequency
+        end else if (SW2 == 1'b1 && SW3 == 1'b0) begin
+            frequency <= blue; // Display blue frequency
+        end else begin
+            frequency <= 0;
+        end
+    end
+
+endmodule
