@@ -2,54 +2,67 @@
 //The constraint file needs to be udpated accordingly to the JA ports due to orietation of basys with respect to rover and claw
 //Change default config of claw to open
 
-module servo_pwm_control (
-    input clk,              // System clock
-    input reset,            // Reset signal
-    input open,             // Command to open the claw
-    output reg pwm_out,     // PWM output for the servo
-    output reg led          // Debugging LED output
+module pwm_generator (
+    input wire clk,          //  MHz clock
+    input wire rst,          // Reset
+    input wire [2:0] sw,     // Switch input for angle setting
+    input wire oc,           // Overcurrent signal
+    output reg pwm_out       // PWM output
 );
 
-    // Parameters for servo timing (in clock cycles)
-    parameter WIDTH = 20;            // Counter width for clock precision
-    parameter PERIOD = 20'd1000000;  // Full PWM period (20 ms for 50 Hz)
-    parameter DUTY_OPEN = 20'd50000; // Duty cycle for fully open (1 ms pulse)
-    parameter DUTY_CLOSED = 20'd100000; // Duty cycle for fully closed (2 ms pulse)
+    reg [27:0] counter;      // Counter for PWM generation
+    reg [27:0] DS_1;         // Duty Cycle Setting
+    reg temp_oc;
+    reg real_oc;
+    reg [27:0] oc_reset;
 
-    // Internal registers
-    reg [WIDTH-1:0] counter;         // PWM counter
-    reg [WIDTH-1:0] duty;            // Current duty cycle
-
-    // PWM generation logic
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            counter <= 0;
-            pwm_out <= 0;
-        end else begin
-            // Increment the counter
-            if (counter < PERIOD - 1)
-                counter <= counter + 1;
-            else
-                counter <= 0;
-
-            // Update PWM output based on duty cycle
-            pwm_out <= (counter < duty);
-        end
+     //Initial block to set initial values
+    initial begin
+        temp_oc = 0;
+        oc_reset = 0;
     end
 
-    // Duty cycle and LED control logic
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            duty <= DUTY_OPEN; // Default to open position
-            led <= 1;          // Turn LED on for open position
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            counter <= 0;
+            DS_1 <= 0;
+            temp_oc <= 0;
+            oc_reset <= 0;
+            real_oc <= 0;
         end else begin
-            if (open) begin
-                duty <= DUTY_OPEN; // Open position
-                led <= 1;          // Turn LED on
-            end else begin
-                duty <= DUTY_CLOSED; // Closed position
-                led <= 0;            // Turn LED off
+            // Increment counter every clock cycle
+            if (counter < 2000000) begin
+                counter <= counter + 1;
+            end else begin 
+                counter <= 0; // Reset counter after reaching max
             end
+            
+            // Overcurrent condition handling
+            if (oc) begin
+                temp_oc = 1;
+            end 
+            if(temp_oc) begin
+                if(oc_reset < 10000000) begin
+                    oc_reset <= oc_reset + 1;
+                end else begin
+                    if(oc) begin
+                        real_oc = 1;
+                    end    
+                    temp_oc = 0;
+                    oc_reset = 0;
+                end
+            end
+            // Determine DS_1 based on switch settings
+            case (sw)
+                3'b000: DS_1 <= 28'd250000;   // 0% Duty Cycle
+                3'b001: DS_1 <= 28'd200000;   // 25% Duty Cycle (~90 degrees)
+                3'b010: DS_1 <= 28'd100000;   // 50% Duty Cycle (~180 degrees)
+                default: DS_1 <= 28'd50000;   // Default to 0% Duty Cycle
+            endcase
+
+            // Set PWM output based on counter and DS_1, with temp_oc consideration
+            pwm_out <= (counter > DS_1);
+            //pwm_out <= ((counter > DS_1) && (real_oc == 0));
         end
     end
 endmodule
