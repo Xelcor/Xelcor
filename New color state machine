@@ -9,10 +9,10 @@ module ColorSensorStateMachine(
     output reg S2 = 0,
     output reg S3 = 0,
     output reg [1:0] color_state = 0,
-    output reg [29:0] color_sequence_flat = 30'b0, 
+    output reg [29:0] color_sequence_flat = 30'b0, // Flattened sequence buffer (10 colors * 3 bits)
     output reg [3:0] color_count = 0,
-    output reg [2:0] detected_color = 3'b000, // Currently detected color
-    output reg pad_complete = 0,             // Indicates when the entire pad has been read
+    output reg [2:0] detected_color = 3'b000,      // Currently detected color
+    output reg pad_complete = 0,                  // Indicates when the entire pad has been read
     output [31:0] frequency,
     output done
 );
@@ -45,6 +45,7 @@ module ColorSensorStateMachine(
         end else if (done) begin
             case (color_state)
                 BLANK_STATE: begin
+                    pad_complete <= 0; // Reset pad_complete at the start of detection
                     done_color <= 0; // Reset the done flag
                     color_state <= RED_STATE;
                     S2 <= 1'b0; // Select red photodiode
@@ -105,3 +106,8 @@ module ColorSensorStateMachine(
         end
     end
 endmodule
+
+
+    
+              
+       
