@@ -14,39 +14,25 @@ module top(
 
     // Internal signals
     reg [31:0] frequency;
-    wire [31:0] red, green, blue, frequency;
+    wire [31:0] red, green, blue;
     wire done_color;
     wire pad_complete;
     wire [2:0] detected_color;
-    wire [29:0] color_sequence_flat; // Stores the sequence of detected colors
+    wire [29:0] color_sequence_flat;
     wire [3:0] color_count;
 
-    // Assign detected color to LEDs
-    assign rgb_output = detected_color; // Display the currently detected color
-    assign LED[2:0] = detected_color;   // Also show it on LEDs
-    assign LED[3] = done_color;         // Indicate when a color is detected
-    assign LED[4] = pad_complete;       // Indicate when the pad detection is complete
+    // Assign outputs
+    assign rgb_output = detected_color;
+    assign LED[0] = detected_color[0];  // Detected color LSB
+    assign LED[1] = detected_color[1];  // Detected color middle bit
+    assign LED[2] = detected_color[2];  // Detected color MSB
+    assign LED[3] = done_color;         // Color detected flag
+    assign LED[4] = pad_complete;       // Pad detection complete
+    assign LED[8] = color_sequence_flat[0];  // LSB of sequence
+    assign LED[9] = color_sequence_flat[1];  // Second bit of sequence
+    assign LED[10] = color_sequence_flat[2]; // Third bit of sequence
 
-    // Instantiate 7-segment display for sequence or frequency
-    seven_segment_display ssd (
-        .CLK100MHZ(CLK100MHZ),
-        .frequency({5'b0, frequency}),
-        .seg(seg),
-        .an(an)
-    );
-
-    // Convert frequencies to RGB output (optional, if needed)
-    FrequencyToColorConverter f2 (
-        .clk(CLK100MHZ),
-        .reset(reset),
-        .done_color(done_color),
-        .red(red),
-        .green(green),
-        .blue(blue),
-        .rgb_output(rgb_output)
-    );
-
-    // Color Sensor State Machine
+    // Instantiate the ColorSensorStateMachine
     ColorSensorStateMachine csm (
         .clk(CLK100MHZ),
         .reset(reset),
@@ -57,25 +43,34 @@ module top(
         .blue(blue),
         .S2(S2),
         .S3(S3),
-        .color_sequence_flat(color_sequence_flat), // Sequence of detected colors
-        .color_count(color_count),                 // Number of detected colors
-        .detected_color(detected_color),           // Current detected color
-        .pad_complete(pad_complete)                // Pad detection complete signal
+        .color_sequence_flat(color_sequence_flat),
+        .color_count(color_count),
+        .detected_color(detected_color),
+        .pad_complete(pad_complete)
     );
 
-    // Logic for frequency output selection
+    // Logic for frequency selection
     always @(posedge CLK100MHZ) begin
         if (reset) begin
             frequency <= 0;
         end else if (SW2 == 1'b0 && SW3 == 1'b0) begin
-            frequency <= red; // Display red frequency
+            frequency <= red; // Red frequency
         end else if (SW2 == 1'b0 && SW3 == 1'b1) begin
-            frequency <= green; // Display green frequency
+            frequency <= green; // Green frequency
         end else if (SW2 == 1'b1 && SW3 == 1'b0) begin
-            frequency <= blue; // Display blue frequency
+            frequency <= blue; // Blue frequency
         end else begin
             frequency <= 0;
         end
     end
 
+    // Instantiate seven-segment display
+    seven_segment_display ssd (
+        .CLK100MHZ(CLK100MHZ),
+        .frequency({5'b0, frequency}),
+        .seg(seg),
+        .an(an)
+    );
+
 endmodule
+
