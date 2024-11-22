@@ -12,6 +12,8 @@ module ColorSensorStateMachine(
     output reg [29:0] color_sequence_flat = 30'b0, // Flattened sequence buffer (10 colors * 3 bits)
     output reg [3:0] color_count = 0,
     output reg [2:0] detected_color = 3'b000,      // Currently detected color
+    output reg [2:0] initial_color = 3'b000,      // The initial color detected
+    output reg initial_color_saved = 0,           // Flag to indicate the initial color is saved
     output reg pad_complete = 0,                  // Indicates when the entire pad has been read
     output [31:0] frequency,
     output done
@@ -40,21 +42,23 @@ module ColorSensorStateMachine(
             color_sequence_flat <= 30'b0;
             color_count <= 0;
             detected_color <= 3'b000;
+            initial_color <= 3'b000;
+            initial_color_saved <= 0;
             done_color <= 0;
             pad_complete <= 0;
         end else if (done) begin
             case (color_state)
                 BLANK_STATE: begin
                     pad_complete <= 0; // Reset pad_complete at the start of detection
-                    done_color <= 0; // Reset the done flag
+                    done_color <= 0;   // Reset the done flag
                     color_state <= RED_STATE;
-                    S2 <= 1'b0; // Select red photodiode
+                    S2 <= 1'b0;        // Select red photodiode
                     S3 <= 1'b0;
                 end
                 RED_STATE: begin
                     red <= frequency;
                     color_state <= GREEN_STATE;
-                    S2 <= 1'b1; // Select green photodiode
+                    S2 <= 1'b1;        // Select green photodiode
                     S3 <= 1'b1;
 
                     // Update detected color for red
@@ -67,7 +71,7 @@ module ColorSensorStateMachine(
                 GREEN_STATE: begin
                     green <= frequency;
                     color_state <= BLUE_STATE;
-                    S2 <= 1'b0; // Select blue photodiode
+                    S2 <= 1'b0;        // Select blue photodiode
                     S3 <= 1'b1;
 
                     // Update detected color for green
@@ -79,7 +83,7 @@ module ColorSensorStateMachine(
                 end
                 BLUE_STATE: begin
                     blue <= frequency;
-                    done_color <= 1; // All color frequencies captured
+                    done_color <= 1;   // All color frequencies captured
                     color_state <= BLANK_STATE;
                     S2 <= 1'b0;
                     S3 <= 1'b0;
@@ -89,6 +93,12 @@ module ColorSensorStateMachine(
                         detected_color <= 3'b001; // Blue
                     end else begin
                         detected_color <= 3'b000; // No color
+                    end
+
+                    // Save the initial color if it hasn't been saved yet
+                    if (!initial_color_saved && detected_color != 3'b000) begin
+                        initial_color <= detected_color;
+                        initial_color_saved <= 1;
                     end
 
                     // Store detected color if valid
@@ -106,7 +116,6 @@ module ColorSensorStateMachine(
         end
     end
 endmodule
-
 
     
               
