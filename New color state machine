@@ -9,7 +9,7 @@ module ColorSensorStateMachine(
     output reg S2 = 0,
     output reg S3 = 0,
     output reg [1:0] color_state = 0,
-    output reg [29:0] color_sequence_flat = 30'b0, // Flattened sequence buffer (10 colors * 3 bits)
+    output reg [29:0] color_sequence_flat = 30'b0, 
     output reg [3:0] color_count = 0,
     output reg [2:0] detected_color = 3'b000,      // Currently detected color
     output reg [2:0] initial_color = 3'b000,      // The initial color detected
