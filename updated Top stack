@@ -29,9 +29,11 @@ module top(
     assign LED[4] = pad_complete;       // All colors detected (pad complete)
 
     // Debugging outputs for stored colors
-    assign LED[8] = color_sequence_flat[29]; // first stored color
-    assign LED[9] = color_sequence_flat[26]; // second stored color
-    assign LED[10] = color_sequence_flat[23]; // third stored color
+   // Assign initial color to LEDs 
+	assign LED[5] = initial_color[0]; // Initial color  (Blue)
+	assign LED[6] = initial_color[1]; // Initial color  (Green)
+	assign LED[7] = initial_color[2]; // Initial color  (Red)
+
 
     // Instantiate the ColorSensorStateMachine
     ColorSensorStateMachine csm (
