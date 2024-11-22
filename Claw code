@@ -1,0 +1,38 @@
+module pwm_generator (
+    input wire clk,          // MHz clock
+    input wire rst,          // Reset
+    input wire [2:0] sw,     // Switch input for angle setting
+    output reg pwm_out       // PWM output
+);
+
+    reg [27:0] counter;      // Counter for PWM generation
+    reg [27:0] DS_1;         // Duty Cycle Setting
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            counter <= 0;
+            DS_1 <= 28'd180000; // Force Default to Fully Open (9%)
+            pwm_out <= 0;       // Explicitly set PWM output to low during reset
+        end else begin
+            // Increment counter every clock cycle
+            if (counter < 2000000) begin
+                counter <= counter + 1;
+            end else begin 
+                counter <= 0; // Reset counter after reaching max
+            end
+            
+            // Determine DS_1 based on switch settings
+            case (sw)
+                3'b000: DS_1 <= 28'd100000;    // Fully Closed (5%)
+                3'b001: DS_1 <= 28'd140000;    // Partially Closed (7%)
+                3'b010: DS_1 <= 28'd160000;    // Mostly Open (8%)
+                3'b011: DS_1 <= 28'd180000;    // Fully Open (9%)
+                default: DS_1 <= 28'd180000;   // Default to Fully Open (9%)
+            endcase
+
+            // Set PWM output based on counter and DS_1
+            pwm_out <= (counter < DS_1);  // Start low, go high during duty cycle
+        end
+    end
+endmodule
+
