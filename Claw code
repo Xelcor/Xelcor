@@ -1,5 +1,4 @@
 **Credit to T.Nguyen** - edited and succesfully implemented 
-**Partial creidt to A.Rosales
 
 module pwm_generator (
    input wire clk,          // MHz clock
