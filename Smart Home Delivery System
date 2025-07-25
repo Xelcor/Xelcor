@@ -1,0 +1,171 @@
+import os
+import time
+import smtplib
+import threading
+import webbrowser
+from datetime import datetime
+from email.message import EmailMessage
+
+import RPi.GPIO as GPIO
+from picamera2 import Picamera2
+
+import tkinter as tk
+from tkinter import scrolledtext
+
+from flask import Flask, render_template_string, request, redirect, url_for
+
+# -----------------------
+# Configuration
+# -----------------------
+EMAIL_ADDRESS = 'bejaranojakob9@gmail.com'
+EMAIL_PASSWORD = 'cktx jjqd bpaa hfki'
+TO_EMAIL = 'bejaranojakob9@gmail.com'
+
+IR_PIN = 17
+SERVO_PIN = 18
+IMAGE_FOLDER = "static"
+latest_image = None
+system_running = False
+
+# -----------------------
+# Setup
+# -----------------------
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(IR_PIN, GPIO.IN)
+GPIO.setup(SERVO_PIN, GPIO.OUT)
+
+servo = GPIO.PWM(SERVO_PIN, 50)
+servo.start(0)
+
+picam2 = Picamera2()
+picam2.configure(picam2.create_still_configuration(main={"format": "RGB888", "size": (640, 480)}))
+picam2.start()
+
+os.makedirs(IMAGE_FOLDER, exist_ok=True)
+
+# -----------------------
+# Flask Setup
+# -----------------------
+app = Flask(__name__)
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    global system_running
+    if request.method == 'POST':
+        system_running = True
+        log(" System started from web interface.")
+        return redirect(url_for('index'))
+
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return render_template_string("""
+        <head><meta http-equiv="refresh" content="5"></head>
+        <h2>Smart Package Detection</h2>
+        {% if image %}
+            <img src="/static/{{ image }}" width="640"><br>
+        {% else %}
+            <p>No image captured yet.</p>
+        {% endif %}
+        <p>Last updated: {{ timestamp }}</p>
+
+        {% if not running %}
+            <form method="post">
+                <button type="submit">Start System</button>
+            </form>
+        {% else %}
+            <p style="color: green;"><strong>System is running...</strong></p>
+        {% endif %}
+    """, image=latest_image, timestamp=timestamp, running=system_running)
+
+def start_flask():
+    app.run(host="0.0.0.0", port=5000)
+
+# -----------------------
+# Tkinter GUI Setup
+# -----------------------
+root = tk.Tk()
+root.title("Smart Package Detector")
+root.geometry("600x400")
+
+log_window = scrolledtext.ScrolledText(root, width=70, height=20)
+log_window.pack(padx=10, pady=10)
+
+def log(message):
+    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    def insert_log():
+        log_window.insert(tk.END, f"{timestamp} {message}\n")
+        log_window.see(tk.END)
+    root.after(0, insert_log)
+
+# -----------------------
+# Email Function
+# -----------------------
+def send_email_with_image(image_path):
+    msg = EmailMessage()
+    msg.set_content("A package has been detected. See attached image.")
+    msg["Subject"] = "Package Detected!"
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = TO_EMAIL
+
+    with open(image_path, 'rb') as img:
+        msg.add_attachment(img.read(), maintype='image', subtype='jpeg', filename=os.path.basename(image_path))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        smtp.send_message(msg)
+
+# -----------------------
+# IR Monitor Thread
+# -----------------------
+def monitor_ir():
+    global latest_image, system_running
+    sms_sent = False
+    while True:
+        if not system_running:
+            time.sleep(0.5)
+            continue
+
+        if GPIO.input(IR_PIN) == 0 and not sms_sent:
+            log(" Package detected!")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            image_filename = f"package_{timestamp}.jpg"
+            image_path = os.path.join(IMAGE_FOLDER, image_filename)
+            latest_image = image_filename
+
+            picam2.capture_file(image_path)
+            log(f" Captured image: {image_filename}")
+
+            try:
+                send_email_with_image(image_path)
+                log(" Email sent successfully.")
+            except Exception as e:
+                log(f" Email failed: {e}")
+
+            # Trigger Servo
+            log(" Closing lid...")
+            servo.ChangeDutyCycle(7)  # Adjust for closed position
+            time.sleep(0.5)
+            servo.ChangeDutyCycle(0)
+
+            sms_sent = True
+            log(" Action completed.")
+
+        elif GPIO.input(IR_PIN) == 1:
+            sms_sent = False
+
+        time.sleep(0.5)
+
+# -----------------------
+# Start Threads and GUI
+# -----------------------
+threading.Thread(target=start_flask, daemon=True).start()
+threading.Thread(target=monitor_ir, daemon=True).start()
+
+webbrowser.open("http://127.0.0.1:5000", new=0)
+
+root.mainloop()
+
+# -----------------------
+# Cleanup
+# -----------------------
+GPIO.cleanup()
+picam2.close()
