@@ -21,21 +21,45 @@ EMAIL_ADDRESS = 'bejaranojakob9@gmail.com'
 EMAIL_PASSWORD = 'cktx jjqd bpaa hfki'
 TO_EMAIL = 'bejaranojakob9@gmail.com'
 
-IR_PIN = 17
-SERVO_PIN = 18
+IR_INTERNAL_PIN = 17
+IR_EXTERNAL_PIN = 27
+SERVO_PIN_1 = 12		# Right servo
+SERVO_PIN_2 = 13   # Left servo
 IMAGE_FOLDER = "static"
 latest_image = None
 system_running = False
+system_status = "Idle"
 
 # -----------------------
 # Setup
 # -----------------------
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(IR_PIN, GPIO.IN)
-GPIO.setup(SERVO_PIN, GPIO.OUT)
+GPIO.setup(IR_INTERNAL_PIN, GPIO.IN)
+GPIO.setup(IR_EXTERNAL_PIN, GPIO.IN)
+GPIO.setup(SERVO_PIN_1, GPIO.OUT)
+GPIO.setup(SERVO_PIN_2, GPIO.OUT)
 
-servo = GPIO.PWM(SERVO_PIN, 50)
-servo.start(0)
+servo1 = GPIO.PWM(SERVO_PIN_1, 50)
+servo2 = GPIO.PWM(SERVO_PIN_2, 50)
+servo1.start(0)
+servo2.start(0)
+
+# Helper function to move both servos simultaneously
+def set_servo_position(duty_cycle):
+    servo1.ChangeDutyCycle(duty_cycle)
+    servo2.ChangeDutyCycle(duty_cycle)
+
+def close_lid():
+    set_servo_position(7)
+    time.sleep(0.5)
+    set_servo_position(0)
+
+def open_lid():
+    set_servo_position(12.5)
+    time.sleep(0.5)
+    set_servo_position(0)
+
+close_lid()  # Ensure lid is closed on startup
 
 picam2 = Picamera2()
 picam2.configure(picam2.create_still_configuration(main={"format": "RGB888", "size": (640, 480)}))
@@ -74,7 +98,9 @@ def index():
         {% else %}
             <p style="color: green;"><strong>System is running...</strong></p>
         {% endif %}
-    """, image=latest_image, timestamp=timestamp, running=system_running)
+
+        <p><strong>Status:</strong> {{ status }}</p>
+    """, image=latest_image, timestamp=timestamp, running=system_running, status=system_status)
 
 def start_flask():
     app.run(host="0.0.0.0", port=5000)
@@ -117,15 +143,30 @@ def send_email_with_image(image_path):
 # IR Monitor Thread
 # -----------------------
 def monitor_ir():
-    global latest_image, system_running
+    global latest_image, system_running, system_status
     sms_sent = False
+    lid_open = False
+    last_motion_time = 0
+    
     while True:
         if not system_running:
             time.sleep(0.5)
             continue
 
-        if GPIO.input(IR_PIN) == 0 and not sms_sent:
-            log(" Package detected!")
+        current_time = time.time()
+
+        if GPIO.input(IR_EXTERNAL_PIN) == 0:
+            if not lid_open and (current_time - last_motion_time > 3):
+                log(" External motion detected. Opening lid...")
+                system_status = "Opening lid..."
+                open_lid()
+                lid_open = True
+                last_motion_time = current_time
+                system_status = "Waiting for package..."
+
+        if GPIO.input(IR_INTERNAL_PIN) == 0 and lid_open and not sms_sent:
+            log(" Package detected inside box!")
+            system_status = "Capturing image..."
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             image_filename = f"package_{timestamp}.jpg"
             image_path = os.path.join(IMAGE_FOLDER, image_filename)
@@ -137,19 +178,18 @@ def monitor_ir():
             try:
                 send_email_with_image(image_path)
                 log(" Email sent successfully.")
+                system_status = "Email sent. Closing lid..."
+                close_lid()
+                lid_open = False
             except Exception as e:
                 log(f" Email failed: {e}")
-
-            # Trigger Servo
-            log(" Closing lid...")
-            servo.ChangeDutyCycle(7)  # Adjust for closed position
-            time.sleep(0.5)
-            servo.ChangeDutyCycle(0)
+                system_status = "Email failed. Lid remains open."
 
             sms_sent = True
             log(" Action completed.")
+            system_status = "Waiting for next delivery..."
 
-        elif GPIO.input(IR_PIN) == 1:
+        elif GPIO.input(IR_INTERNAL_PIN) == 1:
             sms_sent = False
 
         time.sleep(0.5)
@@ -169,3 +209,5 @@ root.mainloop()
 # -----------------------
 GPIO.cleanup()
 picam2.close()
+
+      
