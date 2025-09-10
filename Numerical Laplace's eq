@@ -1,0 +1,154 @@
+% code developed in MATLAB
+% Solves Laplaces eq's numerically using finite difference method. I employ Succesive over relaxation to obtain the potenial and then use the staggerd grid method to find the electric field calcualted from the potential
+% Problen geometry is that of a rectangle with a = 20, b = 10, and the left, top and bottom walls having a V0 = 0 volts. The right wall has a VO = 10V
+
+% Grid and g Values
+clc, clear, close all;
+V0 = 10                 % Potential
+
+% Makes Uniform Lattice
+a = 20;                 % width in cm
+b = 10;                 % height in cm
+h = b/100;              % Uniform step
+xvec = 0:h:a;           % node corrdinates
+yvec = 0:h:b;           % node corrdinates
+[X,Y] = meshgrid(xvec,yvec);  % plots grid
+Nx = length(xvec);
+Ny = length(yvec);
+Nr = Ny;                % matrix row = y
+Nc = Nx;                % matrix column = x
+
+
+% Boundary Conditons for Potenial
+phi = zeros(Nr,Nc);     % Potential Matrix
+phi(:,1) = 0;           % left wall
+phi(:,end) = V0;        % right wall
+phi(1,:) = 0;           % Bottom wall
+phi(end,:) = 0;         % Top wall
+
+
+
+% Optimum valuee for w for a uniform grid
+Ni = Nx - 2             % interior counts in x
+Nj = Ny - 2             % interior counts in y 
+t  = cos(pi/Ni) + cos(pi/Nj);
+w  = (8 - sqrt(64 - 16*t^2)) / (t^2);   % relaxation factor 1 < w < 2  (lecture 3)
+omega = max(1.0+1e-6, min(1.999, w));   
+fprintf('Using omega = %.6f (Ni=%d, Nj=%d)\n', omega, Ni, Nj);              
+
+
+% To stop iteratoin
+err = Inf;
+maxIter = 4000;
+errorTol = 1e-6;
+k = 1;                  % Number of Iteratoins 
+
+% Intial Norm
+prevNorm = norm(phi,'fro');
+
+% SOR Loop ( the way I've understood this is that the SOR update will move
+% each interior node towards average, scaled by w. 
+while (err >= errorTol) && (k <= maxIter)
+    for m = 2: Nr - 1
+        for n = 2: Nc - 1
+            rk = 0.25*(phi(m+1,n)+phi(m-1,n)+phi(m,n+1)+phi(m,n-1));
+            phi(m,n) = phi(m,n) + omega*(rk - phi(m,n)); 
+        end
+    end
+
+    % BC's, again
+    phi(:,1) = 0;           % left wall
+    phi(:,end) = V0;        % right wall
+    phi(1,:) = 0;           % bottom wall
+    phi(end,:) = 0;         % Top wall
+
+    % Norm criterion
+    phiNorm = norm(phi, 'fro');
+    err = abs(phiNorm - prevNorm);
+    prevNorm = phiNorm;
+
+    if mod(k,500)==0
+        fprintf('Iteratoin &6d | err = %.3e\n', k, err);
+    end
+
+    k = k + 1
+end
+
+if k > maxIter
+    fprintf('Did not converge in %d iterations (err = %.3e)\n', maxIter, err);
+else
+    fprintf('Converged in %d iterations (err = %.3e)\n', k-1, err);
+end
+
+
+% Calculate the E-Field (Staggered grid)
+hx = xvec(2) - xvec(1);  % uniform grid spacing
+hy = yvec(2) - yvec(1);  % uniform grid spacing
+
+% Ex and Ey
+Ex_face = -(phi(:,2:end) - phi(:,1:end-1)) / hx;
+Ey_face = -(phi(2:end,:) - phi(1:end-1,:)) / hy;
+
+% Avg of Ex & Ey
+Ex_c = 0.5*(Ex_face(1:end-1,:) + Ex_face(2:end,:));
+Ey_c = 0.5*(Ey_face(:,1:end-1) + Ey_face(:,2:end));
+Emag_c = sqrt(Ex_c.^2 + Ey_c.^2);
+
+% Center of grid
+xc = 0.5*(xvec(1:end-1)+xvec(2:end));
+yc = 0.5*(yvec(1:end-1)+yvec(2:end));
+[XC,YC] = meshgrid(xc,yc);
+
+
+
+
+
+
+% Plots for Potential 
+scrsz = get(0, 'ScreenSize');
+figure('Position', [1 1 scrsz(3) scrsz(4)]);
+surf(X,Y,phi);
+title('Electrostatic Potential')
+xlabel('a in cm');
+ylabel('b in cm');
+zlabel('Potential in volts')
+axis([0,a,0,b,0,V0]);
+colorbar;
+shading interp
+
+xlim([0.00 a])
+ylim([0.00 b])
+zlim([0.000 V0])
+figure('Position', [1 1 scrsz(3) scrsz(4)]);
+pcolor(X,Y,phi);
+xlabel('a in cm');
+ylabel('b in cm');
+shading interp;
+title('Electrostatic Potential (volts)')
+
+% Plots for E-field
+
+% Magnitude of E
+figure;
+imagesc(xc, yc, Emag_c);     % use imagesc, not images
+axis xy equal tight;
+colorbar;
+title('|E| (V/cm) at cell centers');
+xlabel('x (cm)'); ylabel('y (cm)');
+
+% Potential background + vector field
+figure;
+imagesc(xvec, yvec, phi);
+axis xy equal tight;
+colorbar;
+hold on;
+
+skip = max(1, round(max(length(xc), length(yc)) / 30));  
+quiver(XC(1:skip:end,1:skip:end), YC(1:skip:end,1:skip:end), ...
+       Ex_c(1:skip:end,1:skip:end), Ey_c(1:skip:end,1:skip:end), 'k');
+
+title('E-field vectors on \phi');
+xlabel('x (cm)'); ylabel('y (cm)');
+
+
+
