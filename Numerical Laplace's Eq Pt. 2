@@ -1,0 +1,163 @@
+% code developed in MATLAB
+% Solves Laplaces eq's numerically using finite difference method. I employ Succesive over relaxation to obtain the potenial and then use the staggerd grid method to find the electric field calcualted from the potential
+% Problen geometry is that of a rectangle with a smaller embedded rectangle inside.
+% The dimensions are a = 20cm, b = 10cm, c = 8cm, d = 4cm, with a step size of h = b/100. 
+% The Potential for the outer walls are phi = 0V, while the inner rectangle has a phi = 10V
+
+% Grid and g Values
+clc, clear, close all;
+V0 = 10                 % Potential
+
+% Geomerty 
+a = 20;                 % outer width in cm
+b = 10;                 % outer height in cm
+c = 8;                  % width of the embbeded rectangle
+d = 4;                  % height of the embedded rectangle
+h = b/100;              % Uniform step
+
+% Inner rectangle
+x0 = (a - c)/2;
+x1 = (a + c)/2;
+y0 = (b - d)/2;
+y1 = (b + d)/2;
+
+% makes the lattice 
+xvec = 0:h:a;           % node corrdinates
+yvec = 0:h:b;           % node corrdinates
+[X,Y] = meshgrid(xvec,yvec);  % plots grid in 2D
+Nx = length(xvec);      % nodes in x
+Ny = length(yvec);      % nodes in y
+Nr = Ny;                % matrix row = y
+Nc = Nx;                % matrix column = x
+
+
+
+% Boundary Conditons for Potenial
+phi = zeros(Nr,Nc);     % Potential Matrix
+phi(:,1) = 0;           % left wall
+phi(:,end) = 0;        % right wall
+phi(1,:) = 0;           % Bottom wall
+phi(end,:) = 0;         % Top wall
+
+
+% Index of nodes for embedded rectangle
+xi_in = (xvec >= x0) & (xvec <= x1);    % columns
+yi_in = (yvec >= y0) & (yvec <= y1);    % rows
+
+
+% Dirichlet Boundary nodes (true = fixed value)
+is_fixed = false(Nr, Nc);                      % start with nothing fixed
+is_fixed(:, 1)   = true;                       % outer boundary is fixed
+is_fixed(:, end) = true;
+is_fixed(1, :)   = true;
+is_fixed(end, :) = true;
+is_fixed(yi_in, xi_in) = true;                 % embedded rectangle region is fixed at V0
+
+% Matrix of the actual fixed values (only inner block is nonzero)
+phi_fixed = zeros(Nr, Nc);                     % hold the target values for fixed nodes
+phi_fixed(yi_in, xi_in) = V0;                  % inner conductor set to +10 V
+
+% Initialize phi with its fixed values (outer walls already zero)
+phi(yi_in, xi_in) = V0;                        %  inner rectangle set to 10 V
+
+% SOR PARAMETERS
+Ni = Nc - 2;                                   % interior points in x (exclude 2 boundaries)
+Nj = Nr - 2;                                   % interior points in y
+t  = cos(pi/Ni) + cos(pi/Nj);                  % t value in w formula (uniform grid)
+w  = (8 - sqrt(64 - 16*t^2)) / (t^2);          % optimal value for w SOR factor from class lecture 3, P6
+omega = max(1.0+1e-6, min(1.999, w));          
+fprintf('Using omega = %.6f (Ni=%d, Nj=%d)\n', omega, Ni, Nj);
+
+% Stopping rule (use ||φ|| difference)
+tol     = 1e-6;                                % convergence tolerance
+maxIter = 40000;                               % cap on iterations
+k       = 1;                                   % iteration counter
+err     = Inf;                                 % current error
+prevNorm = norm(phi, 'fro');                   % ||phi|| "norm"
+
+% SOR ITERATION  
+
+while (err >= tol) && (k <= maxIter)           % loop until converged or cap hit
+    for m = 2:Nr-1                             % sweep over interior rows (skip boundaries)
+        for n = 2:Nc-1                         % sweep over interior cols
+            if is_fixed(m,n), continue; end    % do NOT update Dirichlet nodes
+            % 5-point Gauss–Seidel average (Laplace stencil)
+            gs = 0.25 * ( ...
+                 phi(m+1,n) + phi(m-1,n) + ... % up + down
+                 phi(m,n+1) + phi(m,n-1) );    % right + left
+            % SOR update: move φ toward the GS average by factor ω
+            phi(m,n) = phi(m,n) + omega * (gs - phi(m,n));
+        end
+    end
+
+    phi(is_fixed) = phi_fixed(is_fixed);       % re-assert all fixed values (belt & suspenders)
+
+    % Norm-difference stopping criterion
+    phiNorm = norm(phi, 'fro');                % ||φ|| at k+1
+    err = abs(phiNorm - prevNorm);             % change in the norm
+    prevNorm = phiNorm;                        % store for next iteration
+
+    if mod(k, 500) == 0                        % progress print every 500 iters
+        fprintf('Iteration %6d | err = %.3e\n', k, err);
+    end
+    k = k + 1;                                 % next iteration
+end
+
+% Report convergence outcome
+if k > maxIter
+    fprintf('Did not converge in %d iterations (err = %.3e)\n', maxIter, err);
+else
+    fprintf('Converged in %d iterations (err = %.3e)\n', k-1, err);
+end
+fprintf('phi range: [%.4f, %.4f] V\n', min(phi(:)), max(phi(:)));
+
+% ===================== E-FIELD (STAGGERED GRID) =============
+
+hx = xvec(2) - xvec(1);                        % Δx (cm)
+hy = yvec(2) - yvec(1);                        % Δy (cm)
+
+% Face-centered derivatives: E = −∇φ
+Ex_face = -(phi(:,2:end) - phi(:,1:end-1)) / hx;   % Ny × (Nx−1) at vertical faces (i+1/2, j)
+Ey_face = -(phi(2:end,:) - phi(1:end-1,:)) / hy;   % (Ny−1) × Nx at horizontal faces (i, j+1/2)
+
+% Average both components to cell centers so they share a common grid
+Ex_c = 0.5 * (Ex_face(1:end-1,:) + Ex_face(2:end,:));  % (Ny−1) × (Nx−1)
+Ey_c = 0.5 * (Ey_face(:,1:end-1) + Ey_face(:,2:end));  % (Ny−1) × (Nx−1)
+Emag_c = sqrt(Ex_c.^2 + Ey_c.^2);                      % |E| at cell centers (V/cm)
+
+% Cell-center coordinates for plotting/quiver
+xc = 0.5 * (xvec(1:end-1) + xvec(2:end));      % x-centers (length Nx−1)
+yc = 0.5 * (yvec(1:end-1) + yvec(2:end));      % y-centers (length Ny−1)
+[XC, YC] = meshgrid(xc, yc);                    % center grids (Ny−1) × (Nx−1)
+
+% ===================== PLOTS ================================
+
+scr = get(0, 'ScreenSize');                    % full-screen sizing helper
+
+% (1) Potential: colormap + equipotentials + inner box outline
+figure('Position',[50 60 scr(3)*0.44 scr(4)*0.8]);
+imagesc(xvec, yvec, phi); axis xy equal tight; colorbar;
+hold on;
+contour(xvec, yvec, phi, 12, 'k', 'LineWidth', 0.6);   % equipotential lines
+rectangle('Position', [x0, y0, c, d], 'EdgeColor',[1 1 1], 'LineWidth',1.2);
+title('\phi(x,y) with equipotentials'); xlabel('x (cm)'); ylabel('y (cm)');
+
+% (2) |E| at cell centers 
+figure('Position',[scr(3)*0.52 60 scr(3)*0.44 scr(4)*0.8]);
+imagesc(xc, yc, Emag_c); 
+axis xy equal tight; colorbar;
+caxis([0, prctile(Emag_c(:), 99)]);            % visualization-only clip
+title('|E| (V/cm) at cell centers'); 
+xlabel('x (cm)'); ylabel('y (cm)');
+
+% (3) E-vectors 
+figure('Position',[50 60 scr(3)*0.44 scr(4)*0.8]);
+imagesc(xvec, yvec, phi); 
+axis xy equal tight; 
+colorbar; hold on;
+skip = max(1, round(max(length(xc), length(yc))/30));  
+quiver(XC(1:skip:end,1:skip:end), YC(1:skip:end,1:skip:end), ...
+       Ex_c(1:skip:end,1:skip:end), Ey_c(1:skip:end,1:skip:end), 'k');
+rectangle('Position', [x0, y0, c, d], 'EdgeColor',[1 1 1], 'LineWidth',1.2);
+title('E-field vectors'); 
+xlabel('x (cm)'); ylabel('y (cm)');
