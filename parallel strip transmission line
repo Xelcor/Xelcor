@@ -1,0 +1,182 @@
+%% This program implements the Finite difference method for an inhomogeneous dielectric medium to find the electric potential
+%% using Succesive over relaxation, the E-field using a staggerd grid, and the characteristic impedence of the paralell stip transmission line
+%% I've assumed the horizantal conducting strips are one cell thick and used phi = 0 on the outer box boundary that enlcosed the strip, phi = 1 volt
+%% on the upper strip, and phi = -1 volt on the lower strip
+%% capaciatance per unit length, epsilon_eff, and the characteristic impedence are all displayed along with plots for E-field, equipotentias,and vector plot 
+
+clc; clear; close all;
+
+%% User inputs 
+use_mm = true;                % true if you enter w,d in millimeters
+w_in  = 3;                    % strip length across x (mm if use_mm=true)
+d_in  = 2;                    % substrate thickness (mm if use_mm=true)
+
+% Convert to centimeters for the mesh
+if use_mm
+    w = w_in/10;              % cm
+    d = d_in/10;              % cm
+else
+    w = w_in;                 % cm
+    d = d_in;                 % cm
+end
+
+%% geometry
+a = 7*w;                      % outer width of imaginry boundary (cm)
+b = 9*d;                      % outer height of imaginry boundary (cm)
+h = min(0.1*w, 0.1*d);        % grid step    (cm)
+
+% I did this to fix the grid cells
+if h <= 0 || h >= min(a,b)
+    warning('Adjusting h; got h=%.4g, a=%.4g, b=%.4g.', h, a, b);
+    h = min(a,b)/200;         
+end
+
+% Grid
+xvec = 0:h:a;
+yvec = 0:h:b;                 
+[X,Y] = meshgrid(xvec, yvec);
+Nx = numel(xvec); Ny = numel(yvec);
+fprintf('Geometry: a=%.3f cm, b=%.3f cm, w=%.3f cm, d=%.3f cm, h=%.3f cm | Nx=%d Ny=%d\n', ...
+        a,b,w,d,h,Nx,Ny);
+if Nx < 2 || Ny < 2, error('Grid too small (Nx=%d, Ny=%d).', Nx, Ny); end
+
+% Conductors & substrate 
+% Outer box boundary 
+is_outer = false(Ny,Nx);
+is_outer(:,1)   = true; is_outer(:,end) = true;
+is_outer(1,:)   = true; is_outer(end,:) = true;
+
+% Substrates center, height = d, width = a
+y0s = (b - d)/2;  y1s = (b + d)/2;
+is_sub = (Y >= y0s) & (Y <= y1s);
+epsr_sub = 2.2;
+
+% Two strips (1-cell thick), length = w, 
+x0s = (a - w)/2;  x1s = (a + w)/2;
+ix_strip = (xvec >= x0s) & (xvec <= x1s);
+
+% Place strips *inside the substrate*
+y_lo = y0s + 0.25*d;  y_up = y0s + 0.75*d;
+[~,iy_lo] = min(abs(yvec - y_lo));
+[~,iy_up] = min(abs(yvec - y_up));
+
+is_lostrip = false(Ny,Nx); is_lostrip(iy_lo, ix_strip) = true;  % -1 V
+is_upstrip = false(Ny,Nx); is_upstrip(iy_up, ix_strip) = true;  % +1 V
+
+%%  Epsilon 
+epsr_dielectric = ones(Ny,Nx); 
+epsr_dielectric(is_sub) = epsr_sub;
+epsr_air        = ones(Ny,Nx);                              
+
+% Physical constants and potentials
+eps0 = 8.854187817e-12;     % F/m
+c0   = 299792458;           % m/s
+Vup  = +1;                  % V
+Vlow = -1;                  % V   
+
+% Solve (dielectric and air) do this twice
+[phi_d, Ex_c_d, Ey_c_d, Em_c_d, eps_c_d] = solve_and_fields( ...
+    xvec, yvec, is_outer, is_upstrip, is_lostrip, Vup, Vlow, epsr_dielectric, eps0);
+
+[phi_a, Ex_c_a, Ey_c_a, Em_c_a, eps_c_a] = solve_and_fields( ...
+    xvec, yvec, is_outer, is_upstrip, is_lostrip, Vup, Vlow, epsr_air, eps0);
+
+%Capacitance / length via energy
+% Convert cm to m for area
+hx = (xvec(2)-xvec(1))*1e-2;
+hy = (yvec(2)-yvec(1))*1e-2;
+dA = hx*hy;
+
+% Energy densities use *cell-centered* |E| and epsilon
+Wprime_d = 0.5 * sum( eps_c_d(:) .* (Em_c_d(:)).^2 ) * dA;   % J/m
+Wprime_a = 0.5 * sum( eps_c_a(:) .* (Em_c_a(:)).^2 ) * dA;   % J/m
+
+dV  = (Vup - Vlow);                 % = 2 V
+Cp_d = (2*Wprime_d) / (dV^2);       % F/m with dielectric
+Cp_a = (2*Wprime_a) / (dV^2);       % F/m with air
+
+eps_eff = Cp_d / Cp_a;              % effective permittivity
+vp      = c0 / sqrt(eps_eff);       % m/s
+Z0      = 1 / (vp * Cp_d);          % ohms (since Z0 * vp = 1/C')
+
+fprintf('C''(dielectric)=%.6e F/m | C''(air)=%.6e F/m | eps_eff=%.4f | v_p=%.4e m/s | Z0=%.2f Ω\n', ...
+        Cp_d, Cp_a, eps_eff, vp, Z0);
+
+%% ---------------- Plots (dielectric run) --------------------
+[xc,yc] = center_coords(xvec,yvec); [XC,YC] = meshgrid(xc,yc);
+
+% Potential with equipotentials, strips, substrate outline
+figure; imagesc(xvec, yvec, phi_d); axis xy equal tight; colorbar
+hold on; contour(xvec, yvec, phi_d, 14, 'k', 'LineWidth', 0.7);
+plot(xvec(ix_strip), yvec(iy_up)*ones(1,nnz(ix_strip)),'w-','LineWidth',2);
+plot(xvec(ix_strip), yvec(iy_lo)*ones(1,nnz(ix_strip)),'w-','LineWidth',2);
+rectangle('Position',[0, y0s, a, d], 'EdgeColor',[1 1 1], 'LineWidth',1.2);
+title('\phi (dielectric) with equipotentials'); xlabel('x (cm)'); ylabel('y (cm)');
+
+% |E| map at cell centers (clip top 1% to de-emphasize corner spikes)
+figure; imagesc(xc, yc, Em_c_d); axis xy equal tight; colorbar
+caxis([0, prctile(Em_c_d(:), 99)]);
+title('|E| (V/m) at cell centers — dielectric'); xlabel('x (cm)'); ylabel('y (cm)');
+
+% E-vectors on potential background
+figure; imagesc(xvec, yvec, phi_d); axis xy equal tight; colorbar; hold on
+skip = max(1, round(max(length(xc),length(yc))/30));
+quiver(XC(1:skip:end,1:skip:end), YC(1:skip:end,1:skip:end), ...
+       Ex_c_d(1:skip:end,1:skip:end), Ey_c_d(1:skip:end,1:skip:end), 'k');
+title('E-field vectors on \phi — dielectric'); xlabel('x (cm)'); ylabel('y (cm)');
+
+%% Local functions 
+function [phi, Ex_c, Ey_c, Emag_c, eps_c] = solve_and_fields( ...
+    xvec, yvec, is_outer, is_upstrip, is_lostrip, Vup, Vlow, epsr, eps0)
+
+Ny = numel(yvec); Nx = numel(xvec);
+if Nx < 2 || Ny < 2, error('xvec/yvec need at least 2 points.'); end
+
+phi = zeros(Ny,Nx);
+
+% Dirichlet BC values
+is_fixed  = is_outer | is_upstrip | is_lostrip;
+phi_fixed = zeros(Ny,Nx);
+phi_fixed(is_upstrip) = Vup;
+phi_fixed(is_lostrip) = Vlow;
+phi(is_fixed) = phi_fixed(is_fixed);
+
+% Optimal SOR w (uniform grid)
+Ni = Nx-2; Nj = Ny-2;
+t     = cos(pi/Ni) + cos(pi/Nj);
+wopt  = (8 - sqrt(64 - 16*t^2)) / (t^2);          
+omega = max(1+1e-6, min(1.999, wopt));
+
+% Iterate with ||phi|| difference
+tol=1e-6; maxIter=50000; k=1; err=Inf; prevNorm=norm(phi,'fro');
+while (err>=tol) && (k<=maxIter)
+    for m=2:Ny-1
+        for n=2:Nx-1
+            if is_fixed(m,n), continue; end
+            gs = 0.25*(phi(m+1,n)+phi(m-1,n)+phi(m,n+1)+phi(m,n-1));
+            phi(m,n) = phi(m,n) + omega*(gs - phi(m,n));
+        end
+    end
+    phi(is_fixed) = phi_fixed(is_fixed);   % re-assert BCs
+    phin = norm(phi,'fro'); err = abs(phin - prevNorm); prevNorm = phin; k=k+1;
+end
+
+% Staggered-grid E (to V/m)
+hx = (xvec(2)-xvec(1))*1e-2;
+hy = (yvec(2)-yvec(1))*1e-2;
+Ex_face = -(phi(:,2:end) - phi(:,1:end-1)) / hx;        % Ny x (Nx-1)
+Ey_face = -(phi(2:end,:) - phi(1:end-1,:)) / hy;        % (Ny-1) x Nx
+Ex_c = 0.5*(Ex_face(1:end-1,:) + Ex_face(2:end,:));     % (Ny-1) x (Nx-1)
+Ey_c = 0.5*(Ey_face(:,1:end-1) + Ey_face(:,2:end));     % (Ny-1) x (Nx-1)
+Emag_c = sqrt(Ex_c.^2 + Ey_c.^2);
+
+% epsilon at centers 
+eps = eps0 * epsr;
+eps_c = 0.25*( eps(1:end-1,1:end-1) + eps(2:end,1:end-1) + ...
+               eps(1:end-1,2:end)   + eps(2:end,2:end) );
+end
+
+function [xc,yc] = center_coords(xvec,yvec)
+xc = 0.5*(xvec(1:end-1)+xvec(2:end));
+yc = 0.5*(yvec(1:end-1)+yvec(2:end));
+end
